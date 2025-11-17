@@ -1,0 +1,75 @@
+name: "CodeQL Advanced (vscode-markdown-container)"
+
+on:
+  push:
+    # Adjust branches as needed; many repos use "main". Keep both to be safe.
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  schedule:
+    # Weekly run to keep results fresh
+    - cron: '31 13 * * 0'
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    # Ubuntu runner is sufficient for JS/TS
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write   # required for uploading CodeQL results (SARIF)
+      packages: read           # required to fetch internal/private CodeQL packs
+      actions: read            # needed in private repos
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history if you rely on baselines across commits; default shallow is fine otherwise.
+          # fetch-depth: 0
+          # Submodules can be enabled if needed:
+          # submodules: recursive
+
+      # Set up Node.js to match typical VSCode extension development environments.
+      # If the repo has an .nvmrc or you prefer a specific version, set node-version-file or adjust node-version.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'   # Adjust to match engines in package.json if different
+          cache: 'npm'           # Speeds up dependency installation
+
+      # Install dependencies so the CodeQL JS/TS extractor has type information and can resolve modules.
+      - name: Install dependencies
+        run: npm ci
+        # If you use yarn or pnpm, replace with the appropriate command and enable caching accordingly.
+
+      # Initialize CodeQL with JS/TS only, leverage extended and quality packs for broader coverage.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # Prefix with '+' to combine these packs with any configured packs in a codeql-config.yml (if present).
+          queries: +security-extended,+security-and-quality
+          # If you maintain a CodeQL config file (e.g., to exclude generated code or test fixtures),
+          # you can include it here:
+          # config-file: .github/codeql/codeql-config.yml
+
+      # JS/TS does not need a manual build step for CodeQL. If you have a custom build that generates source
+      # artifacts you'd like analyzed, add it here and switch build-mode to 'manual'.
+      # - name: Build (optional)
+      #   run: npm run build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+          # By default, this uploads SARIF to the Security tab in GitHub.
